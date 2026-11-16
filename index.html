@@ -1,0 +1,1757 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ECO-LUB — Maquette 3D Interactive de l'Usine Pilote</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Import Map Three.js ES Modules (CDN jsDelivr) -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #dce6f2;
+      user-select: none;
+    }
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    #webgl-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      outline: none;
+      touch-action: none;
+    }
+    #labels-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .zone-badge-3d {
+      position: absolute;
+      transform: translate(-50%, -100%);
+      pointer-events: auto;
+      cursor: pointer;
+      transition: transform 0.18s ease, opacity 0.2s ease, box-shadow 0.18s ease;
+      white-space: nowrap;
+    }
+    .zone-badge-3d:hover {
+      transform: translate(-50%, -106%) scale(1.04);
+      z-index: 25;
+    }
+    /* Masquage propre de la barre de défilement horizontale sur mobile */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- CONTENEUR WEBGL PLEIN ÉCRAN -->
+  <div id="canvas-container">
+    <canvas id="webgl-canvas"></canvas>
+  </div>
+
+  <!-- COUCHE DES ÉTIQUETTES 3D FLOTTANTES -->
+  <div id="labels-layer"></div>
+
+  <!-- ÉCRAN DE CHARGEMENT INITIAL -->
+  <div id="loading-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/95 text-white transition-opacity duration-500">
+    <div class="flex items-center gap-4 mb-5 bg-[#F5F6F1] px-6 py-4 rounded-2xl shadow-2xl border border-slate-200">
+      <!-- Logo officiel ECO-LUB SVG -->
+      <svg class="w-12 h-13 shrink-0" viewBox="0 0 100 115" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M50 6 C50 6 86 48 86 72 A36 36 0 1 1 14 72 C14 48 50 6 50 6 Z" fill="#EB9C1D"/>
+        <path d="M25 67 Q46 63 66 46 Q53 71 27 75 Z" fill="#136B37"/>
+        <path d="M29 82 Q52 77 73 56 Q58 86 32 91 Z" fill="#FFFFFF"/>
+      </svg>
+      <div>
+        <div class="text-2xl font-extrabold tracking-tight text-[#18241E]">ECO-LUB</div>
+        <div class="text-xs font-semibold text-slate-600">Usine Pilote de Régénération • Sénégal</div>
+      </div>
+    </div>
+    <div class="w-60 h-1.5 bg-slate-800 rounded-full overflow-hidden mb-2.5">
+      <div id="loading-bar" class="h-full bg-gradient-to-r from-[#EB9C1D] to-[#136B37] w-1/3 transition-all duration-300 rounded-full"></div>
+    </div>
+    <p id="loading-status" class="text-xs text-slate-300 font-medium">Initialisation de la scène industrielle 3D...</p>
+  </div>
+
+  <!-- INTERFACE HUD SUPERPOSÉE (NON BLOQUANTE POUR LA SOURIS) -->
+  <div class="fixed inset-0 z-20 pointer-events-none flex flex-col justify-between p-2.5 sm:p-4">
+    
+    <!-- BARRE SUPÉRIEURE : IDENTITÉ & OUTILS DE PRÉSENTATION -->
+    <div class="flex flex-wrap items-start justify-between gap-2">
+      <!-- Carte Logo Officiel ECO-LUB -->
+      <div class="pointer-events-auto flex items-center gap-3 bg-[#F5F6F1]/95 backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-lg border border-slate-300/80">
+        <svg class="w-9 h-10 shrink-0" viewBox="0 0 100 115" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M50 6 C50 6 86 48 86 72 A36 36 0 1 1 14 72 C14 48 50 6 50 6 Z" fill="#EB9C1D"/>
+          <path d="M25 67 Q46 63 66 46 Q53 71 27 75 Z" fill="#136B37"/>
+          <path d="M29 82 Q52 77 73 56 Q58 86 32 91 Z" fill="#FFFFFF"/>
+        </svg>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-extrabold text-base sm:text-lg tracking-tight text-[#18241E]">ECO-LUB</span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#136B37]/15 text-[#136B37] border border-[#136B37]/30">
+              CONCEPT 3D
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-600 font-medium leading-tight hidden sm:block">
+            Recyclage d'huiles moteur usagées en lubrifiants • Dakar
+          </p>
+        </div>
+      </div>
+
+      <!-- Légende des Flux & Boutons d'Action -->
+      <div class="pointer-events-auto flex flex-wrap items-center gap-1.5 sm:gap-2 bg-white/95 backdrop-blur-md px-3 py-2 rounded-2xl shadow-lg border border-slate-200/90">
+        <!-- Légende couleurs tuyaux -->
+        <div class="flex items-center gap-2.5 text-[11px] font-semibold pr-1">
+          <span class="flex items-center gap-1.5 text-slate-700">
+            <span class="w-3 h-3 rounded-full bg-[#F97316] inline-block shadow-sm"></span>
+            Huile usagée
+          </span>
+          <span class="flex items-center gap-1.5 text-slate-700">
+            <span class="w-3 h-3 rounded-full bg-[#10B981] inline-block shadow-sm"></span>
+            Huile régénérée
+          </span>
+        </div>
+
+        <div class="h-4 w-px bg-slate-200 hidden sm:block"></div>
+
+        <!-- Bouton Surligner le parcours -->
+        <button id="btn-highlight-pipes" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-slate-100 hover:bg-orange-50 text-slate-800 border border-slate-200 transition-all flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-orange-500"></span>
+          <span>Surligner le parcours</span>
+        </button>
+
+        <!-- Bouton Visite Guidée Jury -->
+        <button id="btn-jury-tour" class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-[#136B37] hover:bg-[#0f572c] text-white shadow-sm transition-all flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/>
+          </svg>
+          <span id="jury-tour-label">Visite Guidée Jury</span>
+        </button>
+
+        <!-- Toggle Labels 3D -->
+        <button id="btn-toggle-labels" title="Afficher/Masquer les repères 3D" class="px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors">
+          Repères
+        </button>
+
+        <!-- Toggle Panneau Zones -->
+        <button id="btn-toggle-sidebar" title="Afficher/Masquer le menu des zones" class="px-2.5 py-1.5 rounded-xl text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors">
+          Zones
+        </button>
+      </div>
+    </div>
+
+    <!-- ZONE CENTRALE : NAVIGATION GAUCHE & FICHE DÉTAIL DROITE -->
+    <div class="flex-1 flex items-start justify-between my-2.5 overflow-hidden">
+      
+      <!-- Panneau Gauche Compact : Vues Caméra & 6 Zones -->
+      <aside id="left-sidebar" class="pointer-events-auto w-56 sm:w-60 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/90 p-3 flex flex-col gap-2.5 max-h-full overflow-y-auto transition-all duration-200">
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Angles de Vue</span>
+            <button id="btn-reset-cam" class="text-[10px] font-bold text-[#136B37] hover:underline">Recentrer</button>
+          </div>
+          <div class="grid grid-cols-3 gap-1">
+            <button id="view-iso" class="py-1.5 px-1.5 rounded-xl bg-[#18241E] text-white text-[11px] font-semibold shadow-sm hover:opacity-95 transition">
+              Isométrie
+            </button>
+            <button id="view-interior" class="py-1.5 px-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-semibold border border-slate-200 transition">
+              Intérieur
+            </button>
+            <button id="view-aerial" class="py-1.5 px-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-semibold border border-slate-200 transition">
+              Aérienne
+            </button>
+          </div>
+        </div>
+
+        <div class="border-t border-slate-100 pt-2">
+          <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1.5">
+            Les 6 Zones de l'Usine
+          </div>
+          <div id="zones-menu-list" class="flex flex-col gap-1">
+            <!-- Injecté par JS -->
+          </div>
+        </div>
+
+        <div class="border-t border-slate-100 pt-2 text-[10px] text-slate-500 leading-relaxed">
+          <span class="font-bold text-slate-700">Commandes 3D :</span> Clic gauche pour pivoter • Molette/Pincement pour zoomer • Clic droit pour déplacer • Clic sur une machine pour inspecter.
+        </div>
+      </aside>
+
+      <!-- Fiche Descriptive Droite (Affichée lors d'un clic sur Zone / Machine / Étape) -->
+      <aside id="detail-card" class="pointer-events-auto hidden w-72 sm:w-80 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 p-4 flex-col gap-2.5 max-h-full overflow-y-auto">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <span id="detail-badge" class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-800 mb-1">
+              ZONE 1
+            </span>
+            <h2 id="detail-title" class="text-sm sm:text-base font-extrabold text-slate-900 leading-snug">
+              Titre de l'équipement
+            </h2>
+          </div>
+          <button id="btn-close-detail" class="w-7 h-7 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm shrink-0">
+            ×
+          </button>
+        </div>
+
+        <p id="detail-desc" class="text-xs text-slate-600 leading-relaxed">
+          Description fonctionnelle de la machine ou de la zone.
+        </p>
+
+        <div id="detail-specs-box" class="bg-slate-50 rounded-xl p-2.5 border border-slate-200/80 space-y-1">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Rôle dans le procédé</div>
+          <div id="detail-role" class="text-xs font-semibold text-slate-800"></div>
+        </div>
+
+        <div id="detail-concept-note" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-2.5 text-[11px] text-amber-900 leading-snug">
+          <span class="font-bold">Note conceptuelle :</span> Schéma de procédé représentatif destiné à être validé et dimensionné lors de l'ingénierie de détail.
+        </div>
+      </aside>
+    </div>
+
+    <!-- BARRE INFÉRIEURE : PARCOURS DE TRANSFORMATION EN 9 ÉTAPES -->
+    <div class="pointer-events-auto self-center max-w-full bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/90 px-3 py-2">
+      <div class="flex items-center justify-between gap-3 mb-1 px-1">
+        <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+          Parcours de Transformation ECO-LUB (Cliquez sur une étape)
+        </span>
+        <span class="text-[10px] font-semibold text-slate-400 hidden md:inline">
+          Maquette conceptuelle à valider techniquement
+        </span>
+      </div>
+      <div id="pipeline-steps-bar" class="flex items-center gap-1 overflow-x-auto no-scrollbar pb-0.5">
+        <!-- Injecté par JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT PRINCIPAL THREE.JS -->
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // -------------------------------------------------------------------------
+    // 1. DONNÉES MÉTIER : LES 6 ZONES & LES 9 ÉTAPES DU PARCOURS
+    // -------------------------------------------------------------------------
+    const ZONES_DATA = [
+      {
+        id: 'zone1',
+        num: 'ZONE 1',
+        shortName: '1. Réception & Collecte',
+        title: 'Zone 1 — Réception & Collecte des Huiles Usagées',
+        badgeColor: 'bg-orange-100 text-orange-800',
+        dotColor: '#F97316',
+        role: 'Collecte auprès des garages sénégalais, dépotage sécurisé sur rétention et stockage tampon initial.',
+        desc: 'Point d’entrée des huiles moteur usagées collectées par le camion-citerne ECO-LUB et en fûts de 200 L. L’huile est pompée via une station de dépotage munie de crépines vers la cuve horizontale de réception R-101.',
+        labelPos: new THREE.Vector3(-12.2, 4.6, 3.8),
+        camPos: new THREE.Vector3(-22, 12, 16),
+        camTarget: new THREE.Vector3(-12, 1.8, 3.2)
+      },
+      {
+        id: 'zone2',
+        num: 'ZONE 2',
+        shortName: '2. Stockage Tampon',
+        title: 'Zone 2 — Stockage Vertical des Huiles Brutes',
+        badgeColor: 'bg-orange-100 text-orange-800',
+        dotColor: '#F97316',
+        role: 'Homogénéisation des lots collectés et alimentation régulière de la ligne de traitement.',
+        desc: 'Deux grandes cuves verticales en acier (T-201 et T-202) installées dans un bassin de rétention étanche. Équipées d’indicateurs de niveau visuels, de vannes d’isolement industrielles et d’échelles d’inspection.',
+        labelPos: new THREE.Vector3(-11.4, 7.2, -6.2),
+        camPos: new THREE.Vector3(-20, 13, -1),
+        camTarget: new THREE.Vector3(-11.4, 3.2, -6.2)
+      },
+      {
+        id: 'zone3',
+        num: 'ZONE 3',
+        shortName: '3. Prétraitement',
+        title: 'Zone 3 — Prétraitement & Séparation Mécanique',
+        badgeColor: 'bg-orange-100 text-orange-800',
+        dotColor: '#F97316',
+        role: 'Élimination des particules métalliques, boues lourdes et eau libre avant régénération.',
+        desc: 'Comprend une unité de filtration primaire grossière (F-301), une batterie de filtres industriels duplex (F-302A/B) et un séparateur centrifuge (S-303) permettant d’assainir l’huile brute.',
+        labelPos: new THREE.Vector3(-4.2, 4.8, -4.6),
+        camPos: new THREE.Vector3(-8, 11, 5.5),
+        camTarget: new THREE.Vector3(-4.2, 2.0, -4.6)
+      },
+      {
+        id: 'zone4',
+        num: 'ZONE 4',
+        shortName: '4. Régénération',
+        title: 'Zone 4 — Unité Conceptuelle de Régénération',
+        badgeColor: 'bg-emerald-100 text-emerald-800',
+        dotColor: '#10B981',
+        isConceptual: true,
+        role: 'Fractionnement thermique des contaminants et récupération d’une huile de base régénérée.',
+        desc: 'Comprend un échangeur de préchauffage (E-401), une colonne de distillation représentative du procédé envisagé (C-402), un séparateur de résidus (V-403) et deux réservoirs inox d’huile de base (B-404A/B).',
+        labelPos: new THREE.Vector3(2.6, 8.8, -5.5),
+        camPos: new THREE.Vector3(3.5, 13, 6.5),
+        camTarget: new THREE.Vector3(2.6, 3.4, -4.5)
+      },
+      {
+        id: 'zone5',
+        num: 'ZONE 5',
+        shortName: '5. Labo & Additivation',
+        title: 'Zone 5 — Laboratoire Qualité & Additivation',
+        badgeColor: 'bg-emerald-100 text-emerald-800',
+        dotColor: '#10B981',
+        role: 'Formulation des grades de lubrifiants et vérification stricte des normes physico-chimiques.',
+        desc: 'À gauche, un laboratoire vitré équipé d’appareils d’analyse (viscosimètre, point d’éclair). À droite, une cuve de mélange agitée (M-501) couplée à une station de dosage d’additifs de performance (D-502).',
+        labelPos: new THREE.Vector3(2.8, 4.6, 5.8),
+        camPos: new THREE.Vector3(3.2, 10.5, 15.5),
+        camTarget: new THREE.Vector3(2.8, 1.8, 5.8)
+      },
+      {
+        id: 'zone6',
+        num: 'ZONE 6',
+        shortName: '6. Conditionnement',
+        title: 'Zone 6 — Conditionnement & Produits Finis ECO-LUB',
+        badgeColor: 'bg-emerald-100 text-emerald-800',
+        dotColor: '#10B981',
+        role: 'Mise en bidons, étiquetage marque ECO-LUB et palettisation avant distribution.',
+        desc: 'Ligne automatisée de remplissage et bouchonnage (L-601), convoyeur motorisé avec poste d’étiquetage ECO-LUB (E-602) et racks de stockage des lubrifiants finis prêts pour le marché sénégalais.',
+        labelPos: new THREE.Vector3(12.2, 4.8, 1.5),
+        camPos: new THREE.Vector3(21, 12, 13),
+        camTarget: new THREE.Vector3(12.2, 2.0, 1.2)
+      }
+    ];
+
+    const PIPELINE_STEPS = [
+      { id: 's1', label: 'HUILE USAGÉE', type: 'used', zoneId: 'zone1', desc: 'Collecte des huiles moteur usagées auprès des garages automobiles et transport vers le site ECO-LUB.', camPos: new THREE.Vector3(-23, 10, 14), camTarget: new THREE.Vector3(-14.5, 1.8, 4.5) },
+      { id: 's2', label: 'RÉCEPTION', type: 'used', zoneId: 'zone1', desc: 'Dépotage sécurisé sur aire étanche, filtration de sécurité et transfert vers la cuve de réception R-101.', camPos: new THREE.Vector3(-18, 9.5, 11), camTarget: new THREE.Vector3(-10.5, 1.8, 2.5) },
+      { id: 's3', label: 'STOCKAGE', type: 'used', zoneId: 'zone2', desc: 'Accumulation dans les deux cuves verticales T-201 et T-202 avec contrôle permanent des niveaux.', camPos: new THREE.Vector3(-19, 12, 0), camTarget: new THREE.Vector3(-11.4, 3.2, -6.2) },
+      { id: 's4', label: 'PRÉTRAITEMENT', type: 'used', zoneId: 'zone3', desc: 'Élimination des impuretés solides, boues et traces d’eau par filtration étagée et centrifugation.', camPos: new THREE.Vector3(-7.5, 9.5, 4.5), camTarget: new THREE.Vector3(-4.2, 2.0, -4.6) },
+      { id: 's5', label: 'RÉGÉNÉRATION', type: 'used', zoneId: 'zone4', isConceptual: true, desc: 'Distillation et séparation thermique des contaminants (étape conceptuelle à valider techniquement).', camPos: new THREE.Vector3(1.5, 12.5, 5.5), camTarget: new THREE.Vector3(2.2, 3.6, -6.0) },
+      { id: 's6', label: 'HUILE DE BASE', type: 'clean', zoneId: 'zone4', desc: 'Récupération de l’huile de base régénérée clarifiée dans les réservoirs intermédiaires en inox B-404A/B.', camPos: new THREE.Vector3(4.5, 9.5, 5.5), camTarget: new THREE.Vector3(2.6, 2.0, -1.8) },
+      { id: 's7', label: 'ADDITIVATION', type: 'clean', zoneId: 'zone5', desc: 'Incorporation précise des additifs dans la cuve agitée M-501 pour obtenir la viscosité recherchée.', camPos: new THREE.Vector3(8.5, 9.5, 13.5), camTarget: new THREE.Vector3(5.4, 2.0, 5.8) },
+      { id: 's8', label: 'CONTRÔLE QUALITÉ', type: 'clean', zoneId: 'zone5', desc: 'Validation analytique au laboratoire ECO-LUB (viscosité, point éclair, propreté) avant conditionnement.', camPos: new THREE.Vector3(-1.5, 8.5, 14), camTarget: new THREE.Vector3(0.2, 1.8, 6.2) },
+      { id: 's9', label: 'CONDITIONNEMENT', type: 'clean', zoneId: 'zone6', desc: 'Remplissage des bidons ECO-LUB, étiquetage automatisé et mise sur palettes en zone produits finis.', camPos: new THREE.Vector3(19.5, 10.5, 11.5), camTarget: new THREE.Vector3(11.8, 1.8, 2.2) }
+    ];
+
+    // -------------------------------------------------------------------------
+    // 2. INITIALISATION SCÈNE, CAMÉRA, RENDERER & RESIZE OBSERVER
+    // -------------------------------------------------------------------------
+    const container = document.getElementById('canvas-container');
+    const canvas = document.getElementById('webgl-canvas');
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#dce6f2');
+    scene.fog = new THREE.FogExp2('#dce6f2', 0.0058);
+
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.2, 260);
+    const DEFAULT_CAM_POS = new THREE.Vector3(28, 22, 29);
+    const DEFAULT_CAM_TARGET = new THREE.Vector3(0, 1.8, 0);
+    const INTERIOR_CAM_POS = new THREE.Vector3(0, 8.2, 16.5);
+    const INTERIOR_CAM_TARGET = new THREE.Vector3(0, 2.0, -2.5);
+    const AERIAL_CAM_POS = new THREE.Vector3(0, 39, 13);
+    const AERIAL_CAM_TARGET = new THREE.Vector3(0, 0.5, 0);
+
+    camera.position.copy(DEFAULT_CAM_POS);
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      powerPreference: 'high-performance'
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+
+    const controls = new OrbitControls(camera, canvas);
+    controls.target.copy(DEFAULT_CAM_TARGET);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.065;
+    controls.maxPolarAngle = Math.PI * 0.475; // Empêche de passer sous le sol
+    controls.minDistance = 6;
+    controls.maxDistance = 75;
+    controls.update();
+
+    function updateRendererSize() {
+      const rect = container.getBoundingClientRect();
+      const width = Math.max(1, Math.floor(rect.width || window.innerWidth));
+      const height = Math.max(1, Math.floor(rect.height || window.innerHeight));
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height, false);
+    }
+
+    updateRendererSize();
+    const resizeObserver = new ResizeObserver(() => updateRendererSize());
+    resizeObserver.observe(container);
+    window.addEventListener('resize', updateRendererSize);
+
+    // -------------------------------------------------------------------------
+    // 3. ÉCLAIRAGE INDUSTRIEL PROFESSIONNEL
+    // -------------------------------------------------------------------------
+    const hemiLight = new THREE.HemisphereLight('#ffffff', '#64748b', 0.9);
+    hemiLight.position.set(0, 35, 0);
+    scene.add(hemiLight);
+
+    const sunLight = new THREE.DirectionalLight('#fffbeb', 1.55);
+    sunLight.position.set(26, 40, 24);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 5;
+    sunLight.shadow.camera.far = 110;
+    const d = 28;
+    sunLight.shadow.camera.left = -d;
+    sunLight.shadow.camera.right = d;
+    sunLight.shadow.camera.top = d;
+    sunLight.shadow.camera.bottom = -d;
+    sunLight.shadow.bias = -0.0005;
+    scene.add(sunLight);
+
+    const fillLight = new THREE.DirectionalLight('#bae6fd', 0.5);
+    fillLight.position.set(-24, 20, -18);
+    scene.add(fillLight);
+
+    const labLight = new THREE.PointLight('#e0f2fe', 1.1, 10);
+    labLight.position.set(0.2, 3.0, 6.2);
+    scene.add(labLight);
+
+    // -------------------------------------------------------------------------
+    // 4. GÉNÉRATEUR DE TEXTURE DU LOGO OFFICIEL ECO-LUB
+    // -------------------------------------------------------------------------
+    function createEcoLubLogoTexture(width = 1024, height = 256, subtitle = '') {
+      const c = document.createElement('canvas');
+      c.width = width;
+      c.height = height;
+      const ctx = c.getContext('2d');
+
+      // Fond blanc cassé officiel #F5F6F1
+      ctx.fillStyle = '#F5F6F1';
+      ctx.fillRect(0, 0, width, height);
+
+      // Fin cadre vert foncé
+      ctx.strokeStyle = '#136B37';
+      ctx.lineWidth = Math.max(4, height * 0.025);
+      ctx.strokeRect(4, 4, width - 8, height - 8);
+
+      // Dessin de la goutte dorée-orangée #EB9C1D avec vagues vertes et blanches
+      ctx.save();
+      const s = height / 130;
+      const ox = width * 0.07;
+      const oy = height * 0.06;
+      ctx.translate(ox, oy);
+      ctx.scale(s, s);
+
+      // Goutte #EB9C1D
+      ctx.beginPath();
+      ctx.moveTo(50, 6);
+      ctx.bezierCurveTo(50, 6, 86, 48, 86, 72);
+      ctx.arc(50, 72, 36, 0, Math.PI, false);
+      ctx.bezierCurveTo(14, 48, 50, 6, 50, 6);
+      ctx.closePath();
+      ctx.fillStyle = '#EB9C1D';
+      ctx.fill();
+
+      // Vague supérieure vert foncé #136B37
+      ctx.beginPath();
+      ctx.moveTo(25, 67);
+      ctx.quadraticCurveTo(46, 63, 66, 46);
+      ctx.quadraticCurveTo(53, 71, 27, 75);
+      ctx.closePath();
+      ctx.fillStyle = '#136B37';
+      ctx.fill();
+
+      // Vague inférieure blanche #FFFFFF
+      ctx.beginPath();
+      ctx.moveTo(29, 82);
+      ctx.quadraticCurveTo(52, 77, 73, 56);
+      ctx.quadraticCurveTo(58, 86, 32, 91);
+      ctx.closePath();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fill();
+      ctx.restore();
+
+      // Texte géométrique gras "ECO-LUB" en #18241E
+      const tx = width * 0.25;
+      const ty = subtitle ? height * 0.43 : height * 0.52;
+      ctx.fillStyle = '#18241E';
+      ctx.font = `800 ${Math.round(height * 0.46)}px Inter, Arial, sans-serif`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText('ECO-LUB', tx, ty);
+
+      if (subtitle) {
+        ctx.fillStyle = '#136B37';
+        ctx.font = `700 ${Math.round(height * 0.13)}px Inter, Arial, sans-serif`;
+        ctx.fillText(subtitle, tx + 2, height * 0.78);
+      }
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 8;
+      return tex;
+    }
+
+    function createConcreteFloorTexture() {
+      const c = document.createElement('canvas');
+      c.width = 1024;
+      c.height = 1024;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      // Joints de dilatation béton
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 3;
+      for (let i = 0; i <= 1024; i += 128) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, 1024);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(1024, i);
+        ctx.stroke();
+      }
+      // Grain subtil
+      for (let i = 0; i < 4000; i++) {
+        ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.05)';
+        ctx.fillRect(Math.random() * 1024, Math.random() * 1024, 2, 2);
+      }
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(4, 3);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    }
+
+    // -------------------------------------------------------------------------
+    // 5. MATÉRIAUX INDUSTRIELS & GROUPES INTERACTIFS
+    // -------------------------------------------------------------------------
+    const MAT = {
+      concrete: new THREE.MeshStandardMaterial({ map: createConcreteFloorTexture(), roughness: 0.85, metalness: 0.05 }),
+      steel: new THREE.MeshStandardMaterial({ color: '#cbd5e1', metalness: 0.78, roughness: 0.28 }),
+      stainless: new THREE.MeshStandardMaterial({ color: '#e2e8f0', metalness: 0.88, roughness: 0.18 }),
+      darkSteel: new THREE.MeshStandardMaterial({ color: '#334155', metalness: 0.65, roughness: 0.4 }),
+      ecoDarkGreen: new THREE.MeshStandardMaterial({ color: '#1B4332', metalness: 0.3, roughness: 0.45 }),
+      ecoBrandGreen: new THREE.MeshStandardMaterial({ color: '#136B37', metalness: 0.25, roughness: 0.38 }),
+      ecoOrange: new THREE.MeshStandardMaterial({ color: '#EB9C1D', metalness: 0.25, roughness: 0.4 }),
+      safetyYellow: new THREE.MeshStandardMaterial({ color: '#eab308', metalness: 0.3, roughness: 0.4 }),
+      claddingWhite: new THREE.MeshStandardMaterial({ color: '#F5F6F1', metalness: 0.1, roughness: 0.55 }),
+      glass: new THREE.MeshPhysicalMaterial({ color: '#bae6fd', transparent: true, opacity: 0.34, roughness: 0.1, metalness: 0.05, side: THREE.DoubleSide }),
+      valveRed: new THREE.MeshStandardMaterial({ color: '#dc2626', metalness: 0.45, roughness: 0.35 }),
+      rubber: new THREE.MeshStandardMaterial({ color: '#1e293b', roughness: 0.85 }),
+      asphalt: new THREE.MeshStandardMaterial({ color: '#334155', roughness: 0.9 }),
+      groundGrass: new THREE.MeshStandardMaterial({ color: '#86efac', roughness: 0.95 })
+    };
+
+    const clickableObjects = [];
+    const architectureMeshes = []; // Permet d'atténuer les murs en mode "Surligner le parcours"
+    const animatedBottles = [];
+    const animatedFlowPulses = [];
+    const pipeMeshes = [];
+
+    function registerInteractive(object3D, info) {
+      object3D.traverse((child) => {
+        if (child.isMesh) {
+          child.userData.interactiveInfo = info;
+          clickableObjects.push(child);
+        }
+      });
+    }
+
+    function addShadowMesh(parent, geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      m.rotation.set(rx, ry, rz);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      parent.add(m);
+      return m;
+    }
+
+    // -------------------------------------------------------------------------
+    // 6. CONSTRUCTION DE L'ARCHITECTURE DU BÂTIMENT EN COUPE OUVERTE
+    // -------------------------------------------------------------------------
+    function buildFactoryArchitecture() {
+      const arch = new THREE.Group();
+      scene.add(arch);
+
+      // Terrain extérieur (y = -0.22)
+      const terrain = new THREE.Mesh(new THREE.BoxGeometry(140, 0.2, 140), new THREE.MeshStandardMaterial({ color: '#cbd5e1', roughness: 0.95 }));
+      terrain.position.set(0, -0.32, 0);
+      terrain.receiveShadow = true;
+      arch.add(terrain);
+
+      // Espaces verts paysagers autour du site (y = -0.19)
+      const greenBelt = new THREE.Mesh(new THREE.BoxGeometry(44, 0.12, 32), new THREE.MeshStandardMaterial({ color: '#4d7c0f', roughness: 0.9 }));
+      greenBelt.position.set(0, -0.24, 0);
+      greenBelt.receiveShadow = true;
+      arch.add(greenBelt);
+
+      // Route d'accès poids-lourds à gauche (x = -24.5, y = -0.15 -> zéro Z-fighting)
+      const road = new THREE.Mesh(new THREE.BoxGeometry(10.5, 0.14, 65), MAT.asphalt);
+      road.position.set(-24.2, -0.21, 0);
+      road.receiveShadow = true;
+      arch.add(road);
+
+      // Marquages routiers blancs (y = -0.13)
+      for (let z = -26; z <= 26; z += 5) {
+        const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 2.4), MAT.claddingWhite);
+        dash.rotation.x = -Math.PI / 2;
+        dash.position.set(-24.2, -0.13, z);
+        arch.add(dash);
+      }
+
+      // Dalle principale en béton de l'usine : 34m x 22m, face supérieure STRICTEMENT à y = 0.00
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(34, 0.4, 22), MAT.concrete);
+      slab.position.set(0, -0.2, 0);
+      slab.receiveShadow = true;
+      arch.add(slab);
+
+      // Bordure de sécurité jaune périphérique (y = 0.012)
+      const borderMat = MAT.safetyYellow;
+      const bFront = new THREE.Mesh(new THREE.PlaneGeometry(34, 0.25), borderMat);
+      bFront.rotation.x = -Math.PI / 2;
+      bFront.position.set(0, 0.012, 10.85);
+      arch.add(bFront);
+
+      const bLeft = new THREE.Mesh(new THREE.PlaneGeometry(0.25, 22), borderMat);
+      bLeft.rotation.x = -Math.PI / 2;
+      bLeft.position.set(-16.85, 0.012, 0);
+      arch.add(bLeft);
+
+      // Allée piétonne centrale sécurisée (y = 0.012)
+      const aisle = new THREE.Mesh(new THREE.PlaneGeometry(31, 1.3), new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.85 }));
+      aisle.rotation.x = -Math.PI / 2;
+      aisle.position.set(0, 0.012, -0.2);
+      aisle.receiveShadow = true;
+      arch.add(aisle);
+
+      // Marquages au sol des 6 zones (y = 0.016)
+      const zonePads = [
+        { x: -12.0, z: 4.5, w: 8.6, d: 10.5, color: '#fed7aa' }, // Zone 1
+        { x: -11.5, z: -6.2, w: 9.2, d: 8.2, color: '#ffedd5' }, // Zone 2
+        { x: -4.2, z: -4.8, w: 4.8, d: 9.5, color: '#fef3c7' },  // Zone 3
+        { x: 2.6, z: -4.5, w: 7.4, d: 10.0, color: '#d1fae5' },  // Zone 4
+        { x: 2.8, z: 5.8, w: 9.2, d: 8.2, color: '#dcfce7' },    // Zone 5
+        { x: 12.2, z: 1.5, w: 7.8, d: 16.5, color: '#ecfdf5' }   // Zone 6
+      ];
+      zonePads.forEach((zp) => {
+        const padMat = new THREE.MeshStandardMaterial({
+          color: zp.color,
+          roughness: 0.85,
+          transparent: true,
+          opacity: 0.55
+        });
+        const pad = new THREE.Mesh(new THREE.PlaneGeometry(zp.w, zp.d), padMat);
+        pad.rotation.x = -Math.PI / 2;
+        pad.position.set(zp.x, 0.016, zp.z);
+        pad.receiveShadow = true;
+        arch.add(pad);
+      });
+
+      // MURS EN COUPE OUVERTE : Mur arrière (z = -11) et Mur droit (x = +17)
+      // Soubassement vert industriel foncé (0 à 3.2m) + Bardage blanc cassé (3.2m à 10.2m)
+      const rearLower = addShadowMesh(arch, new THREE.BoxGeometry(34.3, 3.2, 0.3), MAT.ecoDarkGreen, 0, 1.6, -11);
+      const rearUpper = addShadowMesh(arch, new THREE.BoxGeometry(34.3, 7.0, 0.28), MAT.claddingWhite, 0, 6.7, -11);
+      const rightLower = addShadowMesh(arch, new THREE.BoxGeometry(0.3, 3.2, 22.3), MAT.ecoDarkGreen, 17, 1.6, 0);
+      const rightUpper = addShadowMesh(arch, new THREE.BoxGeometry(0.28, 7.0, 22.3), MAT.claddingWhite, 17, 6.7, 0);
+      architectureMeshes.push(rearLower, rearUpper, rightLower, rightUpper);
+
+      // Verrières hautes (clerestory windows) sur le mur arrière
+      for (let wx = -12; wx <= 12; wx += 6) {
+        const winFrame = addShadowMesh(arch, new THREE.BoxGeometry(3.8, 1.5, 0.36), MAT.darkSteel, wx, 8.2, -11);
+        const winGlass = new THREE.Mesh(new THREE.BoxGeometry(3.5, 1.25, 0.38), MAT.glass);
+        winGlass.position.set(wx, 8.2, -11);
+        arch.add(winGlass);
+        architectureMeshes.push(winFrame, winGlass);
+      }
+
+      // Poteaux métalliques structurels (Côtés ouverts avant et gauche pour vue isométrique dégagée)
+      const colPositions = [
+        [-17, -11], [-8.5, -11], [0, -11], [8.5, -11], [17, -11],
+        [-17, 0], [-17, 11], [17, 0], [17, 11], [8.5, 11]
+      ];
+      colPositions.forEach(([cx, cz]) => {
+        const col = addShadowMesh(arch, new THREE.BoxGeometry(0.36, 10.2, 0.36), MAT.ecoDarkGreen, cx, 5.1, cz);
+        architectureMeshes.push(col);
+      });
+
+      // Toiture partielle en coupe sur la moitié arrière (z = -11.2 à z = -1.2)
+      const roofDeck = addShadowMesh(arch, new THREE.BoxGeometry(34.6, 0.25, 10.2), MAT.ecoDarkGreen, 0, 10.35, -6.2);
+      architectureMeshes.push(roofDeck);
+      for (let tx = -17; tx <= 17; tx += 8.5) {
+        const truss = addShadowMesh(arch, new THREE.BoxGeometry(0.24, 0.55, 10.0), MAT.darkSteel, tx, 9.95, -6.2);
+        architectureMeshes.push(truss);
+      }
+
+      // Passerelle d'inspection surélevée (Mezzanine le long du mur arrière)
+      const catwalk = addShadowMesh(arch, new THREE.BoxGeometry(27.5, 0.16, 1.7), MAT.darkSteel, -1.5, 4.1, -9.8);
+      architectureMeshes.push(catwalk);
+      // Garde-corps jaune sécurité
+      const railTop = addShadowMesh(arch, new THREE.BoxGeometry(27.5, 0.07, 0.07), MAT.safetyYellow, -1.5, 5.15, -8.98);
+      const railMid = addShadowMesh(arch, new THREE.BoxGeometry(27.5, 0.05, 0.05), MAT.safetyYellow, -1.5, 4.65, -8.98);
+      architectureMeshes.push(railTop, railMid);
+      for (let rx = -15; rx <= 12; rx += 2.25) {
+        const post = addShadowMesh(arch, new THREE.BoxGeometry(0.06, 1.05, 0.06), MAT.safetyYellow, rx, 4.62, -8.98);
+        architectureMeshes.push(post);
+      }
+      // Escalier d'accès à la passerelle (x = -7.6)
+      for (let s = 0; s < 12; s++) {
+        const step = addShadowMesh(arch, new THREE.BoxGeometry(1.0, 0.08, 0.28), MAT.steel, -7.6, 0.34 + s * 0.34, -5.2 - s * 0.32);
+        architectureMeshes.push(step);
+      }
+
+      // ENSEIGNE OFFICIELLE ECO-LUB #1 : Portique d'entrée latéral gauche (x = -17.2, z = 4.5)
+      const logoTexMain = createEcoLubLogoTexture(1024, 256, 'RÉGÉNÉRATION D’HUILES • SÉNÉGAL');
+      const logoMat = new THREE.MeshStandardMaterial({ map: logoTexMain, roughness: 0.3, metalness: 0.1 });
+
+      const portalBeam = addShadowMesh(arch, new THREE.BoxGeometry(0.45, 0.45, 7.2), MAT.ecoDarkGreen, -17, 6.8, 4.5);
+      const signBox = addShadowMesh(arch, new THREE.BoxGeometry(0.32, 1.55, 6.2), MAT.ecoDarkGreen, -17.1, 7.75, 4.5);
+      const signOuter = new THREE.Mesh(new THREE.PlaneGeometry(6.0, 1.42), logoMat);
+      signOuter.rotation.y = -Math.PI / 2;
+      signOuter.position.set(-17.28, 7.75, 4.5);
+      arch.add(signOuter);
+      const signInner = new THREE.Mesh(new THREE.PlaneGeometry(6.0, 1.42), logoMat);
+      signInner.rotation.y = Math.PI / 2;
+      signInner.position.set(-16.92, 7.75, 4.5);
+      arch.add(signInner);
+      architectureMeshes.push(portalBeam, signBox, signOuter, signInner);
+
+      // ENSEIGNE OFFICIELLE ECO-LUB #2 : Fronton principal sur la rive de toiture (visible en vue isométrique)
+      const frontonBox = addShadowMesh(arch, new THREE.BoxGeometry(7.6, 1.85, 0.35), MAT.ecoDarkGreen, 0, 11.2, -1.25);
+      const frontonFace = new THREE.Mesh(new THREE.PlaneGeometry(7.35, 1.68), logoMat);
+      frontonFace.position.set(0, 11.2, -1.06);
+      arch.add(frontonFace);
+      architectureMeshes.push(frontonBox, frontonFace);
+    }
+
+    // -------------------------------------------------------------------------
+    // 7. MODÉLISATION DÉTAILLÉE DES 6 ZONES & ÉQUIPEMENTS
+    // -------------------------------------------------------------------------
+    function buildZone1Reception() {
+      const z1 = new THREE.Group();
+      scene.add(z1);
+
+      // 1A. Camion-citerne de collecte ECO-LUB (garé en zone de déchargement)
+      const truck = new THREE.Group();
+      truck.position.set(-14.8, 0, 5.4);
+
+      // Châssis & pare-chocs
+      addShadowMesh(truck, new THREE.BoxGeometry(2.2, 0.32, 6.4), MAT.darkSteel, 0, 0.78, 0);
+      // Cabine moderne vert foncé & blanc
+      addShadowMesh(truck, new THREE.BoxGeometry(2.15, 1.85, 1.85), MAT.ecoDarkGreen, 0, 1.75, 2.15);
+      addShadowMesh(truck, new THREE.BoxGeometry(2.18, 0.55, 1.9), MAT.claddingWhite, 0, 1.15, 2.15);
+      // Pare-brise
+      addShadowMesh(truck, new THREE.BoxGeometry(1.92, 0.78, 0.08), MAT.glass, 0, 2.05, 3.08);
+      // Phares
+      addShadowMesh(truck, new THREE.BoxGeometry(0.35, 0.2, 0.06), MAT.safetyYellow, -0.75, 1.05, 3.12);
+      addShadowMesh(truck, new THREE.BoxGeometry(0.35, 0.2, 0.06), MAT.safetyYellow, 0.75, 1.05, 3.12);
+
+      // Citerne cylindrique horizontale
+      const tankCyl = addShadowMesh(truck, new THREE.CylinderGeometry(1.02, 1.02, 4.1, 28), MAT.stainless, 0, 1.92, -0.9, Math.PI / 2, 0, 0);
+      const capFront = addShadowMesh(truck, new THREE.SphereGeometry(1.02, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2), MAT.ecoOrange, 0, 1.92, 1.15, Math.PI / 2, 0, 0);
+      const capBack = addShadowMesh(truck, new THREE.SphereGeometry(1.02, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2), MAT.ecoOrange, 0, 1.92, -2.95, -Math.PI / 2, 0, 0);
+
+      // Plaques latérales nettes avec le logo officiel ECO-LUB orienté horizontalement sur les 2 flancs
+      const truckLogoTex = createEcoLubLogoTexture(1024, 256, 'COLLECTE D’HUILES USAGÉES');
+      const truckLogoMat = new THREE.MeshStandardMaterial({ map: truckLogoTex, roughness: 0.3, metalness: 0.1 });
+      const leftSideSign = addShadowMesh(truck, new THREE.BoxGeometry(0.08, 0.85, 3.3), MAT.ecoDarkGreen, -1.03, 1.92, -0.9);
+      const leftLogoPlane = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.78), truckLogoMat);
+      leftLogoPlane.rotation.y = -Math.PI / 2;
+      leftLogoPlane.position.set(-1.08, 1.92, -0.9);
+      truck.add(leftLogoPlane);
+
+      const rightSideSign = addShadowMesh(truck, new THREE.BoxGeometry(0.08, 0.85, 3.3), MAT.ecoDarkGreen, 1.03, 1.92, -0.9);
+      const rightLogoPlane = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.78), truckLogoMat);
+      rightLogoPlane.rotation.y = Math.PI / 2;
+      rightLogoPlane.position.set(1.08, 1.92, -0.9);
+      truck.add(rightLogoPlane);
+
+      // 6 Roues avec jantes acier
+      [[-1.08, 2.15], [1.08, 2.15], [-1.08, -0.85], [1.08, -0.85], [-1.08, -2.15], [1.08, -2.15]].forEach(([wx, wz]) => {
+        addShadowMesh(truck, new THREE.CylinderGeometry(0.46, 0.46, 0.32, 20), MAT.rubber, wx, 0.46, wz, 0, 0, Math.PI / 2);
+        addShadowMesh(truck, new THREE.CylinderGeometry(0.24, 0.24, 0.34, 16), MAT.steel, wx, 0.46, wz, 0, 0, Math.PI / 2);
+      });
+
+      z1.add(truck);
+      registerInteractive(truck, {
+        badge: 'ZONE 1 • COLLECTE',
+        badgeColor: 'bg-orange-100 text-orange-800',
+        title: 'Camion-Citerne de Collecte ECO-LUB',
+        role: 'Transport sécurisé des huiles moteur usagées depuis les garages automobiles jusqu’à l’usine.',
+        desc: 'Véhicule équipé d’une citerne compartimentée et d’un raccord rapide étanche relié directement à la station de dépotage.'
+      });
+
+      // 1B. Station de dépotage sur caillebotis de rétention (P-101)
+      const skid = new THREE.Group();
+      skid.position.set(-11.8, 0, 5.2);
+      addShadowMesh(skid, new THREE.BoxGeometry(2.2, 0.14, 2.4), MAT.darkSteel, 0, 0.07, 0);
+      addShadowMesh(skid, new THREE.BoxGeometry(2.0, 0.06, 2.2), MAT.steel, 0, 0.15, 0);
+      addShadowMesh(skid, new THREE.CylinderGeometry(0.32, 0.32, 0.9, 18), MAT.ecoOrange, -0.3, 0.65, 0, 0, 0, Math.PI / 2);
+      addShadowMesh(skid, new THREE.BoxGeometry(0.65, 0.65, 0.55), MAT.ecoDarkGreen, 0.45, 0.52, 0);
+      // Débitmètre & vanne
+      addShadowMesh(skid, new THREE.CylinderGeometry(0.18, 0.18, 0.12, 16), MAT.claddingWhite, 0, 1.15, 0, Math.PI / 2, 0, 0);
+      z1.add(skid);
+      registerInteractive(skid, {
+        badge: 'ZONE 1 • DÉPOTAGE',
+        badgeColor: 'bg-orange-100 text-orange-800',
+        title: 'Station de Dépotage & Pompe P-101',
+        role: 'Pompage volumétrique, comptage des volumes reçus et rétention anti-déversement.',
+        desc: 'Assure le transfert étanche de l’huile usagée du camion vers la cuve de réception R-101 tout en retenant les impuretés grossières.'
+      });
+
+      // 1C. Bidons et fûts d'huiles usagées (200 L)
+      const drums = new THREE.Group();
+      drums.position.set(-14.2, 0, 0.4);
+      addShadowMesh(drums, new THREE.BoxGeometry(2.3, 0.14, 2.3), MAT.ecoOrange, 0, 0.07, 0);
+      [[-0.55, -0.55], [0.55, -0.55], [-0.55, 0.55], [0.55, 0.55]].forEach(([dx, dz], idx) => {
+        const drumMat = idx % 2 === 0 ? MAT.ecoOrange : MAT.darkSteel;
+        addShadowMesh(drums, new THREE.CylinderGeometry(0.36, 0.36, 1.05, 20), drumMat, dx, 0.66, dz);
+        addShadowMesh(drums, new THREE.TorusGeometry(0.365, 0.025, 10, 24), MAT.steel, dx, 0.45, dz, Math.PI / 2, 0, 0);
+        addShadowMesh(drums, new THREE.TorusGeometry(0.365, 0.025, 10, 24), MAT.steel, dx, 0.88, dz, Math.PI / 2, 0, 0);
+      });
+      z1.add(drums);
+      registerInteractive(drums, {
+        badge: 'ZONE 1 • APPORTS GARAGES',
+        badgeColor: 'bg-orange-100 text-orange-800',
+        title: 'Fûts d’Huiles Usagées Collectées (200 L)',
+        role: 'Réception des petits conditionnements issus des stations-service et ateliers mécaniques.',
+        desc: 'Fûts métalliques normalisés stockés sur bac de rétention avant vidange par canne d’aspiration vers la cuve R-101.'
+      });
+
+      // 1D. Cuve horizontale de réception R-101
+      const recTank = new THREE.Group();
+      recTank.position.set(-9.5, 0, 2.2);
+      addShadowMesh(recTank, new THREE.BoxGeometry(1.7, 0.65, 0.35), MAT.darkSteel, 0, 0.325, -1.1);
+      addShadowMesh(recTank, new THREE.BoxGeometry(1.7, 0.65, 0.35), MAT.darkSteel, 0, 0.325, 1.1);
+      addShadowMesh(recTank, new THREE.CylinderGeometry(0.95, 0.95, 3.2, 28), MAT.steel, 0, 1.5, 0, Math.PI / 2, 0, 0);
+      addShadowMesh(recTank, new THREE.SphereGeometry(0.95, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2), MAT.ecoOrange, 0, 1.5, 1.6, Math.PI / 2, 0, 0);
+      addShadowMesh(recTank, new THREE.SphereGeometry(0.95, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2), MAT.ecoOrange, 0, 1.5, -1.6, -Math.PI / 2, 0, 0);
+      // Trou d'homme supérieur
+      addShadowMesh(recTank, new THREE.CylinderGeometry(0.32, 0.32, 0.35, 18), MAT.darkSteel, 0, 2.52, 0);
+      z1.add(recTank);
+      registerInteractive(recTank, {
+        badge: 'ZONE 1 • RÉCEPTION',
+        badgeColor: 'bg-orange-100 text-orange-800',
+        title: 'Cuve de Réception R-101',
+        role: 'Première décantation gravitaire et contrôle de réception des huiles usagées.',
+        desc: 'Capacité tampon permettant la séparation initiale des sédiments lourds avant le transfert vers le stockage vertical.'
+      });
+    }
+
+    function buildZone2Storage() {
+      const z2 = new THREE.Group();
+      scene.add(z2);
+
+      // Bassin de rétention étanche (y = 0.04 -> aucun Z-fighting)
+      addShadowMesh(z2, new THREE.BoxGeometry(8.2, 0.08, 5.4), MAT.darkSteel, -11.4, 0.04, -6.4);
+      addShadowMesh(z2, new THREE.BoxGeometry(8.4, 0.35, 0.25), MAT.safetyYellow, -11.4, 0.175, -3.7);
+      addShadowMesh(z2, new THREE.BoxGeometry(8.4, 0.35, 0.25), MAT.safetyYellow, -11.4, 0.175, -9.1);
+      addShadowMesh(z2, new THREE.BoxGeometry(0.25, 0.35, 5.6), MAT.safetyYellow, -15.5, 0.175, -6.4);
+      addShadowMesh(z2, new THREE.BoxGeometry(0.25, 0.35, 5.6), MAT.safetyYellow, -7.3, 0.175, -6.4);
+
+      // Deux grandes cuves verticales T-201 & T-202
+      [-13.3, -9.5].forEach((tx, index) => {
+        const tank = new THREE.Group();
+        tank.position.set(tx, 0.08, -6.4);
+
+        // Jupe d'appui
+        addShadowMesh(tank, new THREE.CylinderGeometry(1.42, 1.48, 0.55, 28), MAT.darkSteel, 0, 0.275, 0);
+        // Virole principale acier
+        addShadowMesh(tank, new THREE.CylinderGeometry(1.4, 1.4, 5.2, 32), MAT.steel, 0, 3.15, 0);
+        // Ceintures de renfort
+        addShadowMesh(tank, new THREE.TorusGeometry(1.42, 0.04, 10, 32), MAT.ecoDarkGreen, 0, 1.9, 0, Math.PI / 2, 0, 0);
+        addShadowMesh(tank, new THREE.TorusGeometry(1.42, 0.04, 10, 32), MAT.ecoDarkGreen, 0, 4.4, 0, Math.PI / 2, 0, 0);
+        // Toit conique
+        addShadowMesh(tank, new THREE.ConeGeometry(1.45, 0.75, 32), MAT.ecoDarkGreen, 0, 6.12, 0);
+
+        // Indicateur de niveau vitré vertical sur la face avant
+        addShadowMesh(tank, new THREE.BoxGeometry(0.16, 4.2, 0.14), MAT.darkSteel, 0, 3.1, 1.42);
+        const levelFillHeight = index === 0 ? 3.3 : 2.7;
+        addShadowMesh(tank, new THREE.BoxGeometry(0.09, levelFillHeight, 0.16), MAT.ecoOrange, 0, 1.05 + levelFillHeight / 2, 1.43);
+
+        // Vanne industrielle rouge en pied de cuve
+        addShadowMesh(tank, new THREE.CylinderGeometry(0.16, 0.16, 0.45, 16), MAT.darkSteel, 0, 0.85, 1.55, Math.PI / 2, 0, 0);
+        addShadowMesh(tank, new THREE.TorusGeometry(0.22, 0.035, 10, 20), MAT.valveRed, 0, 1.15, 1.58);
+
+        z2.add(tank);
+        registerInteractive(tank, {
+          badge: `ZONE 2 • STOCKAGE T-20${index + 1}`,
+          badgeColor: 'bg-orange-100 text-orange-800',
+          title: `Cuve Verticale de Stockage T-20${index + 1}`,
+          role: 'Stockage tampon haute capacité des huiles usagées avant prétraitement.',
+          desc: 'Cuve cylindrique verticale en acier avec indicateur de niveau visuel, vanne de sectionnement et bassin de rétention conforme aux normes environnementales.'
+        });
+      });
+    }
+
+    function buildZone3Pretreatment() {
+      const z3 = new THREE.Group();
+      scene.add(z3);
+
+      // 3A. Filtration primaire F-301
+      const f1 = new THREE.Group();
+      f1.position.set(-5.3, 0, -6.2);
+      addShadowMesh(f1, new THREE.BoxGeometry(1.6, 0.22, 1.6), MAT.darkSteel, 0, 0.11, 0);
+      addShadowMesh(f1, new THREE.CylinderGeometry(0.45, 0.45, 1.85, 22), MAT.ecoOrange, 0, 1.15, 0);
+      addShadowMesh(f1, new THREE.CylinderGeometry(0.52, 0.52, 0.16, 22), MAT.darkSteel, 0, 2.08, 0);
+      z3.add(f1);
+      registerInteractive(f1, {
+        badge: 'ZONE 3 • PRÉTRAITEMENT',
+        badgeColor: 'bg-orange-100 text-orange-800',
+        title: 'Unité de Filtration Primaire F-301',
+        role: 'Retient les particules métalliques grossières et débris solides (> 100 microns).',
+        desc: 'Filtre panier industriel protégé par un contrôle de pression différentielle afin de préserver les équipements en aval.'
+      });
+
+      // 3B. Batterie de filtres duplex F-302A/B
+      const f2 = new THREE.Group();
+      f2.position.set(-3.1, 0, -6.2);
+      addShadowMesh(f2, new THREE.BoxGeometry(2.1, 0.22, 1.5), MAT.darkSteel, 0, 0.11, 0);
+      [-0.48, 0.48].forEach((fx) => {
+        addShadowMesh(f2, new THREE.CylinderGeometry(0.34, 0.34, 2.2, 22), MAT.stainless, fx, 1.32, 0);
+        addShadowMesh(f2, new THREE.SphereGeometry(0.34, 20, 14, 0, Math.PI * 2, 0, Math.PI / 2), MAT.ecoDarkGreen, fx, 2.42, 0);
+      });
+      z3.add(f2);
+      registerInteractive(f2, {
+        badge: 'ZONE 3 • PRÉTRAITEMENT',
+        badgeColor: 'bg-orange-100 text-orange-800',
+        title: 'Batterie de Filtres Industriels Duplex F-302A/B',
+        role: 'Filtration fine en continu (25 microns) sans arrêt de production lors du nettoyage.',
+        desc: 'Système à double corps commutables permettant d’isoler une cartouche pour maintenance pendant que la seconde reste en service.'
+      });
+
+      // 3C. Séparateur centrifuge des impuretés et de l'eau S-303
+      const sep = new THREE.Group();
+      sep.position.set(-4.2, 0, -2.5);
+      addShadowMesh(sep, new THREE.BoxGeometry(2.2, 0.3, 1.8), MAT.darkSteel, 0, 0.15, 0);
+      addShadowMesh(sep, new THREE.BoxGeometry(1.1, 1.1, 1.1), MAT.ecoDarkGreen, -0.35, 0.85, 0);
+      addShadowMesh(sep, new THREE.CylinderGeometry(0.55, 0.65, 1.15, 24), MAT.stainless, 0.42, 1.25, 0);
+      addShadowMesh(sep, new THREE.ConeGeometry(0.55, 0.45, 24), MAT.ecoOrange, 0.42, 2.05, 0);
+      z3.add(sep);
+      registerInteractive(sep, {
+        badge: 'ZONE 3 • SÉPARATION',
+        badgeColor: 'bg-orange-100 text-orange-800',
+        title: 'Séparateur Centrifuge Eau & Boues S-303',
+        role: 'Élimination de l’eau émulsionnée et des boues fines par force centrifuge.',
+        desc: 'Prépare une huile déshydratée et clarifiée prête à entrer dans l’unité thermique de régénération.'
+      });
+    }
+
+    function buildZone4Regeneration() {
+      const z4 = new THREE.Group();
+      scene.add(z4);
+
+      // 4A. Échangeur thermique E-401
+      const exch = new THREE.Group();
+      exch.position.set(0.3, 0, -6.3);
+      addShadowMesh(exch, new THREE.BoxGeometry(0.4, 1.1, 1.1), MAT.darkSteel, -0.8, 0.55, 0);
+      addShadowMesh(exch, new THREE.BoxGeometry(0.4, 1.1, 1.1), MAT.darkSteel, 0.8, 0.55, 0);
+      addShadowMesh(exch, new THREE.CylinderGeometry(0.44, 0.44, 2.4, 24), MAT.ecoOrange, 0, 1.35, 0, 0, 0, Math.PI / 2);
+      addShadowMesh(exch, new THREE.CylinderGeometry(0.48, 0.48, 0.25, 24), MAT.stainless, -1.25, 1.35, 0, 0, 0, Math.PI / 2);
+      addShadowMesh(exch, new THREE.CylinderGeometry(0.48, 0.48, 0.25, 24), MAT.stainless, 1.25, 1.35, 0, 0, 0, Math.PI / 2);
+      z4.add(exch);
+      registerInteractive(exch, {
+        badge: 'ZONE 4 • CONCEPT À VALIDER',
+        badgeColor: 'bg-amber-100 text-amber-800',
+        isConceptual: true,
+        title: 'Échangeur Thermique de Préchauffage E-401',
+        role: 'Montée en température progressive de l’huile prétraitée avant distillation.',
+        desc: 'Optimise la récupération d’énergie thermique en préchauffant la charge entrante avant la colonne de fractionnement.'
+      });
+
+      // 4B. Colonne de distillation représentative C-402
+      const col = new THREE.Group();
+      col.position.set(2.7, 0, -6.2);
+      addShadowMesh(col, new THREE.BoxGeometry(2.1, 0.45, 2.1), MAT.darkSteel, 0, 0.225, 0);
+      addShadowMesh(col, new THREE.CylinderGeometry(0.76, 0.84, 7.2, 32), MAT.stainless, 0, 4.05, 0);
+      // Brides d'étages de plateau
+      [1.8, 3.2, 4.6, 6.0, 7.3].forEach((fy) => {
+        addShadowMesh(col, new THREE.TorusGeometry(0.82, 0.05, 10, 32), MAT.ecoDarkGreen, 0, fy, 0, Math.PI / 2, 0, 0);
+      });
+      addShadowMesh(col, new THREE.SphereGeometry(0.76, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2), MAT.ecoBrandGreen, 0, 7.65, 0);
+      z4.add(col);
+      registerInteractive(col, {
+        badge: 'ZONE 4 • PROCEDÉ CONCEPTUEL',
+        badgeColor: 'bg-amber-100 text-amber-800',
+        isConceptual: true,
+        title: 'Colonne de Distillation Représentative C-402',
+        role: 'Séparation des fractions légères, contaminants oxydés et coupe huile de base.',
+        desc: 'Représentation conceptuelle de l’unité de régénération. Le dimensionnement exact (vide, température, catalyse ou solvant) sera validé en phase d’ingénierie.'
+      });
+
+      // 4C. Séparateur de contaminants V-403
+      const cont = new THREE.Group();
+      cont.position.set(4.9, 0, -6.2);
+      addShadowMesh(cont, new THREE.CylinderGeometry(0.58, 0.58, 3.2, 24), MAT.steel, 0, 1.85, 0);
+      addShadowMesh(cont, new THREE.ConeGeometry(0.58, 0.65, 24), MAT.darkSteel, 0, 0.35, 0, Math.PI, 0, 0);
+      addShadowMesh(cont, new THREE.SphereGeometry(0.58, 20, 14, 0, Math.PI * 2, 0, Math.PI / 2), MAT.ecoOrange, 0, 3.45, 0);
+      z4.add(cont);
+      registerInteractive(cont, {
+        badge: 'ZONE 4 • SÉPARATION CONTAMINANTS',
+        badgeColor: 'bg-amber-100 text-amber-800',
+        isConceptual: true,
+        title: 'Séparateur de Contaminants & Résidus V-403',
+        role: 'Extraction des résidus asphaltiques lourds et valorisation des sous-produits.',
+        desc: 'Assure l’évacuation sécurisée des fractions non lubrifiantes extraites lors de la régénération.'
+      });
+
+      // 4D. Réservoirs intermédiaires d'huile de base régénérée B-404A/B
+      [1.7, 3.7].forEach((bx, idx) => {
+        const baseTank = new THREE.Group();
+        baseTank.position.set(bx, 0, -2.0);
+        addShadowMesh(baseTank, new THREE.CylinderGeometry(0.75, 0.75, 2.7, 26), MAT.stainless, 0, 1.55, 0);
+        addShadowMesh(baseTank, new THREE.SphereGeometry(0.75, 22, 14, 0, Math.PI * 2, 0, Math.PI / 2), MAT.ecoBrandGreen, 0, 2.9, 0);
+        // Voyant huile claire ambrée/verte
+        addShadowMesh(baseTank, new THREE.BoxGeometry(0.1, 1.8, 0.12), MAT.ecoBrandGreen, 0, 1.55, 0.76);
+        z4.add(baseTank);
+        registerInteractive(baseTank, {
+          badge: `ZONE 4 • HUILE DE BASE B-404${idx === 0 ? 'A' : 'B'}`,
+          badgeColor: 'bg-emerald-100 text-emerald-800',
+          title: `Réservoir d’Huile de Base Régénérée B-404${idx === 0 ? 'A' : 'B'}`,
+          role: 'Stockage intermédiaire de l’huile de base régénérée avant formulation.',
+          desc: 'Réservoir en acier inoxydable garantissant la pureté de l’huile de base obtenue avant son transfert vers l’atelier d’additivation.'
+        });
+      });
+    }
+
+    function buildZone5LabAndBlending() {
+      const z5 = new THREE.Group();
+      scene.add(z5);
+
+      // 5A. Laboratoire vitré de Contrôle Qualité (x = 0.2, z = 6.2)
+      const lab = new THREE.Group();
+      lab.position.set(0.2, 0, 6.2);
+      // Plancher technique labo (y = 0.03)
+      addShadowMesh(lab, new THREE.BoxGeometry(4.4, 0.06, 3.8), MAT.claddingWhite, 0, 0.03, 0);
+      // Muret bas + cloisons vitrées
+      addShadowMesh(lab, new THREE.BoxGeometry(4.4, 0.95, 0.14), MAT.ecoDarkGreen, 0, 0.5, 1.85);
+      addShadowMesh(lab, new THREE.BoxGeometry(4.4, 0.95, 0.14), MAT.ecoDarkGreen, 0, 0.5, -1.85);
+      addShadowMesh(lab, new THREE.BoxGeometry(0.14, 0.95, 3.8), MAT.ecoDarkGreen, -2.15, 0.5, 0);
+      addShadowMesh(lab, new THREE.BoxGeometry(0.14, 0.95, 3.8), MAT.ecoDarkGreen, 2.15, 0.5, 0);
+
+      // Parois vitrées & plafond lumineux
+      const gFront = new THREE.Mesh(new THREE.BoxGeometry(4.3, 1.85, 0.06), MAT.glass);
+      gFront.position.set(0, 1.9, 1.85);
+      lab.add(gFront);
+      const gBack = new THREE.Mesh(new THREE.BoxGeometry(4.3, 1.85, 0.06), MAT.glass);
+      gBack.position.set(0, 1.9, -1.85);
+      lab.add(gBack);
+      const gLeft = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.85, 3.7), MAT.glass);
+      gLeft.position.set(-2.15, 1.9, 0);
+      lab.add(gLeft);
+      const gRight = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.85, 3.7), MAT.glass);
+      gRight.position.set(2.15, 1.9, 0);
+      lab.add(gRight);
+      addShadowMesh(lab, new THREE.BoxGeometry(4.5, 0.16, 3.9), MAT.claddingWhite, 0, 2.9, 0);
+
+      // Paillasse intérieure & appareils d'analyse (viscosimètre, spectromètre)
+      addShadowMesh(lab, new THREE.BoxGeometry(3.2, 0.85, 0.85), MAT.steel, 0, 0.48, -0.85);
+      addShadowMesh(lab, new THREE.BoxGeometry(0.65, 0.55, 0.45), MAT.ecoBrandGreen, -0.9, 1.18, -0.85);
+      addShadowMesh(lab, new THREE.BoxGeometry(0.75, 0.48, 0.45), MAT.darkSteel, 0.2, 1.15, -0.85);
+      addShadowMesh(lab, new THREE.CylinderGeometry(0.18, 0.18, 0.62, 16), MAT.ecoOrange, 1.1, 1.22, -0.85);
+
+      z5.add(lab);
+      registerInteractive(lab, {
+        badge: 'ZONE 5 • CONTRÔLE QUALITÉ',
+        badgeColor: 'bg-emerald-100 text-emerald-800',
+        title: 'Laboratoire d’Analyse & Contrôle Qualité',
+        role: 'Certifie la conformité des lubrifiants finis avant leur mise en bidons.',
+        desc: 'Équipé d’un viscosimètre cinématique, d’un appareil de point d’éclair et d’analyseurs physico-chimiques garantissant des performances équivalentes aux huiles neuves.'
+      });
+
+      // 5B. Cuve de mélange & additivation M-501
+      const mixer = new THREE.Group();
+      mixer.position.set(5.2, 0, 4.6);
+      addShadowMesh(mixer, new THREE.CylinderGeometry(0.95, 0.95, 2.6, 28), MAT.stainless, 0, 1.65, 0);
+      addShadowMesh(mixer, new THREE.SphereGeometry(0.95, 24, 14, 0, Math.PI * 2, 0, Math.PI / 2), MAT.ecoBrandGreen, 0, 2.95, 0);
+      // Moteur d'agitateur supérieur
+      addShadowMesh(mixer, new THREE.CylinderGeometry(0.28, 0.28, 0.75, 18), MAT.ecoDarkGreen, 0, 4.15, 0);
+      // Pieds support
+      [[-0.65, -0.65], [0.65, -0.65], [-0.65, 0.65], [0.65, 0.65]].forEach(([px, pz]) => {
+        addShadowMesh(mixer, new THREE.CylinderGeometry(0.08, 0.08, 0.6, 12), MAT.darkSteel, px, 0.3, pz);
+      });
+      z5.add(mixer);
+      registerInteractive(mixer, {
+        badge: 'ZONE 5 • FORMULATION',
+        badgeColor: 'bg-emerald-100 text-emerald-800',
+        title: 'Cuve de Mélange & Blending M-501',
+        role: 'Homogénéisation mécanique et thermique de l’huile de base avec les additifs.',
+        desc: 'Réacteur inox agité permettant de formuler différentes viscosités (15W-40, 20W-50, huiles hydrauliques) adaptées au parc automobile sénégalais.'
+      });
+
+      // 5C. Station d'ajout d'additifs D-502
+      const dosing = new THREE.Group();
+      dosing.position.set(5.2, 0, 7.6);
+      addShadowMesh(dosing, new THREE.BoxGeometry(2.2, 0.2, 1.4), MAT.darkSteel, 0, 0.1, 0);
+      [-0.55, 0.55].forEach((dx) => {
+        addShadowMesh(dosing, new THREE.CylinderGeometry(0.36, 0.36, 1.45, 20), MAT.ecoOrange, dx, 0.92, 0);
+        addShadowMesh(dosing, new THREE.CylinderGeometry(0.38, 0.38, 0.12, 20), MAT.ecoDarkGreen, dx, 1.66, 0);
+      });
+      z5.add(dosing);
+      registerInteractive(dosing, {
+        badge: 'ZONE 5 • ADDITIVATION',
+        badgeColor: 'bg-emerald-100 text-emerald-800',
+        title: 'Station de Dosage d’Additifs D-502',
+        role: 'Injection automatisée des additifs détergents, anti-usure et antioxydants.',
+        desc: 'Système de pompes doseuses de précision garantissant le respect exact des formulations techniques.'
+      });
+    }
+
+    function buildZone6Packaging() {
+      const z6 = new THREE.Group();
+      scene.add(z6);
+
+      // Texture étiquette bidons ECO-LUB
+      const canLabelTex = createEcoLubLogoTexture(512, 256, '15W-40 SYNTHÉTIQUE');
+      const canLabelMat = new THREE.MeshStandardMaterial({ map: canLabelTex, roughness: 0.32 });
+
+      // 6A. Convoyeur & Ligne de remplissage / étiquetage
+      const lineGroup = new THREE.Group();
+      // Convoyeur longitudinal (x = 10.6, z = 6.8 -> z = -2.2)
+      addShadowMesh(lineGroup, new THREE.BoxGeometry(0.95, 0.16, 9.2), MAT.darkSteel, 10.6, 0.92, 2.3);
+      addShadowMesh(lineGroup, new THREE.BoxGeometry(0.76, 0.04, 9.0), MAT.rubber, 10.6, 1.01, 2.3);
+      for (let pz = -1.8; pz <= 6.4; pz += 1.64) {
+        addShadowMesh(lineGroup, new THREE.BoxGeometry(0.88, 0.85, 0.12), MAT.steel, 10.6, 0.425, pz);
+      }
+
+      // Machine de remplissage L-601 (z = 5.4)
+      const filler = new THREE.Group();
+      filler.position.set(10.6, 0, 5.4);
+      addShadowMesh(filler, new THREE.BoxGeometry(1.5, 2.4, 1.4), MAT.stainless, 0, 1.2, 0);
+      addShadowMesh(filler, new THREE.BoxGeometry(1.56, 0.35, 1.46), MAT.ecoBrandGreen, 0, 2.25, 0);
+      addShadowMesh(filler, new THREE.CylinderGeometry(0.45, 0.45, 0.65, 22), MAT.ecoOrange, 0, 2.7, 0);
+      lineGroup.add(filler);
+      registerInteractive(filler, {
+        badge: 'ZONE 6 • REMPLISSAGE',
+        badgeColor: 'bg-emerald-100 text-emerald-800',
+        title: 'Ligne Automatisée de Remplissage L-601',
+        role: 'Dosage volumétrique précis en bidons de 5 L et 20 L suivi du bouchonnage.',
+        desc: 'Garantit un conditionnement propre, sans perte de produit, directement alimenté depuis le laboratoire et le mélange.'
+      });
+
+      // Poste d'étiquetage E-602 (z = 1.4)
+      const labeler = new THREE.Group();
+      labeler.position.set(10.6, 0, 1.4);
+      addShadowMesh(labeler, new THREE.BoxGeometry(1.4, 1.95, 1.1), MAT.ecoDarkGreen, 0, 0.975, 0);
+      addShadowMesh(labeler, new THREE.CylinderGeometry(0.28, 0.28, 0.35, 20), MAT.claddingWhite, -0.52, 1.45, 0);
+      lineGroup.add(labeler);
+      registerInteractive(labeler, {
+        badge: 'ZONE 6 • ÉTIQUETAGE',
+        badgeColor: 'bg-emerald-100 text-emerald-800',
+        title: 'Unité d’Étiquetage Marque ECO-LUB E-602',
+        role: 'Application automatique des étiquettes officielles ECO-LUB et traçabilité de lot.',
+        desc: 'Chaque bidon reçoit l’identité visuelle ECO-LUB, son grade de viscosité et son numéro de certificat qualité.'
+      });
+
+      // Bidons ECO-LUB animés circulant sur le convoyeur
+      for (let i = 0; i < 6; i++) {
+        const bottle = new THREE.Group();
+        addShadowMesh(bottle, new THREE.BoxGeometry(0.32, 0.44, 0.22), MAT.ecoBrandGreen, 0, 0.22, 0);
+        addShadowMesh(bottle, new THREE.CylinderGeometry(0.055, 0.055, 0.08, 12), MAT.ecoOrange, 0.08, 0.48, 0);
+        // Étiquette frontale nette ECO-LUB
+        const lbl = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.16), canLabelMat);
+        lbl.position.set(0, 0.24, 0.113);
+        bottle.add(lbl);
+
+        const startZ = 6.2 - i * 1.45;
+        bottle.position.set(10.6, 1.03, startZ);
+        lineGroup.add(bottle);
+        animatedBottles.push({ mesh: bottle, progress: i / 6 });
+      }
+
+      z6.add(lineGroup);
+
+      // 6B. Racks de stockage des produits finis (x = 14.5, z = -1.5)
+      const storageRacks = new THREE.Group();
+      storageRacks.position.set(14.5, 0, -1.5);
+
+      // Montants verticaux orange industriel & lisses vert foncé
+      [[-0.85, -4.2], [0.85, -4.2], [-0.85, 0], [0.85, 0], [-0.85, 4.2], [0.85, 4.2]].forEach(([rx, rz]) => {
+        addShadowMesh(storageRacks, new THREE.BoxGeometry(0.12, 4.4, 0.12), MAT.ecoOrange, rx, 2.2, rz);
+      });
+      [0.25, 2.2].forEach((ly) => {
+        addShadowMesh(storageRacks, new THREE.BoxGeometry(1.75, 0.1, 8.6), MAT.ecoDarkGreen, 0, ly, 0);
+        // Palettes chargées de cartons/bidons ECO-LUB
+        [-2.8, -0.9, 1.0, 2.9].forEach((pz) => {
+          addShadowMesh(storageRacks, new THREE.BoxGeometry(1.4, 0.14, 1.4), MAT.safetyYellow, 0, ly + 0.12, pz);
+          addShadowMesh(storageRacks, new THREE.BoxGeometry(1.25, 0.95, 1.25), MAT.claddingWhite, 0, ly + 0.66, pz);
+          const palletLogo = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.34), canLabelMat);
+          palletLogo.rotation.y = -Math.PI / 2;
+          palletLogo.position.set(-0.64, ly + 0.68, pz);
+          storageRacks.add(palletLogo);
+        });
+      });
+
+      z6.add(storageRacks);
+      registerInteractive(storageRacks, {
+        badge: 'ZONE 6 • EXPÉDITION',
+        badgeColor: 'bg-emerald-100 text-emerald-800',
+        title: 'Espace de Stockage des Produits Finis',
+        role: 'Palettisation et stockage des lubrifiants régénérés prêts pour la commercialisation.',
+        desc: 'Produits finis certifiés ECO-LUB destinés aux garages partenaires, transporteurs et industriels au Sénégal.'
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // 8. RÉSEAU DE TUYAUTERIE PHYSIQUE, FLÈCHES & ANIMATION DE FLUX
+    // -------------------------------------------------------------------------
+    function buildPipingNetwork() {
+      const pipesGroup = new THREE.Group();
+      scene.add(pipesGroup);
+
+      const routes = [
+        // 1. Camion -> Station dépotage -> Cuve Réception R-101 (Orange)
+        {
+          type: 'used',
+          radius: 0.085,
+          points: [
+            new THREE.Vector3(-13.8, 1.3, 4.8),
+            new THREE.Vector3(-12.6, 0.85, 5.2),
+            new THREE.Vector3(-11.4, 0.85, 5.2),
+            new THREE.Vector3(-10.2, 1.5, 3.8)
+          ]
+        },
+        // 2. Cuve Réception R-101 -> Cuves Stockage T-201 & T-202 (Orange)
+        {
+          type: 'used',
+          radius: 0.09,
+          points: [
+            new THREE.Vector3(-9.5, 2.2, 0.6),
+            new THREE.Vector3(-9.5, 3.4, -2.5),
+            new THREE.Vector3(-11.4, 5.6, -4.6),
+            new THREE.Vector3(-13.3, 5.8, -6.4)
+          ]
+        },
+        {
+          type: 'used',
+          radius: 0.08,
+          points: [
+            new THREE.Vector3(-11.4, 5.6, -4.6),
+            new THREE.Vector3(-9.5, 5.8, -6.4)
+          ]
+        },
+        // 3. Cuves Stockage -> Filtration Primaire F-301 -> Filtres Duplex F-302 -> Centrifugeuse S-303 (Orange)
+        {
+          type: 'used',
+          radius: 0.085,
+          points: [
+            new THREE.Vector3(-9.5, 0.9, -4.9),
+            new THREE.Vector3(-7.4, 0.9, -4.9),
+            new THREE.Vector3(-6.2, 1.6, -6.2),
+            new THREE.Vector3(-5.3, 1.8, -6.2)
+          ]
+        },
+        {
+          type: 'used',
+          radius: 0.08,
+          points: [
+            new THREE.Vector3(-4.85, 1.6, -6.2),
+            new THREE.Vector3(-3.6, 1.6, -6.2)
+          ]
+        },
+        {
+          type: 'used',
+          radius: 0.08,
+          points: [
+            new THREE.Vector3(-3.1, 1.4, -5.4),
+            new THREE.Vector3(-3.5, 1.4, -3.5),
+            new THREE.Vector3(-4.2, 1.7, -2.5)
+          ]
+        },
+        // 4. Centrifugeuse S-303 -> Échangeur E-401 -> Colonne Distillation C-402 -> Séparateur V-403 (Orange)
+        {
+          type: 'used',
+          radius: 0.085,
+          points: [
+            new THREE.Vector3(-3.65, 1.4, -2.5),
+            new THREE.Vector3(-1.6, 1.4, -4.2),
+            new THREE.Vector3(-1.2, 1.35, -6.3)
+          ]
+        },
+        {
+          type: 'used',
+          radius: 0.085,
+          points: [
+            new THREE.Vector3(1.5, 1.35, -6.3),
+            new THREE.Vector3(2.0, 2.6, -6.2)
+          ]
+        },
+        {
+          type: 'used',
+          radius: 0.075,
+          points: [
+            new THREE.Vector3(3.45, 5.2, -6.2),
+            new THREE.Vector3(4.3, 4.2, -6.2),
+            new THREE.Vector3(4.9, 3.5, -6.2)
+          ]
+        },
+        // 5. Colonne C-402 -> Réservoirs d'Huile de Base Régénérée B-404A/B (VERT !)
+        {
+          type: 'clean',
+          radius: 0.085,
+          points: [
+            new THREE.Vector3(2.7, 2.2, -5.35),
+            new THREE.Vector3(2.7, 3.2, -3.6),
+            new THREE.Vector3(1.7, 3.0, -2.0)
+          ]
+        },
+        {
+          type: 'clean',
+          radius: 0.08,
+          points: [
+            new THREE.Vector3(2.7, 3.2, -3.6),
+            new THREE.Vector3(3.7, 3.0, -2.0)
+          ]
+        },
+        // 6. Huile de Base B-404 -> Cuve d'Additivation M-501 + Station Additifs D-502 (VERT)
+        {
+          type: 'clean',
+          radius: 0.085,
+          points: [
+            new THREE.Vector3(3.7, 1.1, -1.25),
+            new THREE.Vector3(4.5, 1.1, 1.8),
+            new THREE.Vector3(5.2, 2.8, 3.8),
+            new THREE.Vector3(5.2, 2.95, 4.6)
+          ]
+        },
+        {
+          type: 'clean',
+          radius: 0.065,
+          points: [
+            new THREE.Vector3(5.2, 1.5, 7.0),
+            new THREE.Vector3(5.2, 2.4, 5.8),
+            new THREE.Vector3(5.2, 2.6, 5.4)
+          ]
+        },
+        // 7. Cuve de Mélange M-501 -> Contrôle Qualité Labo -> Ligne de Conditionnement L-601 (VERT)
+        {
+          type: 'clean',
+          radius: 0.06,
+          points: [
+            new THREE.Vector3(4.25, 1.6, 4.6),
+            new THREE.Vector3(3.0, 1.6, 5.4),
+            new THREE.Vector3(2.35, 1.6, 6.2)
+          ]
+        },
+        {
+          type: 'clean',
+          radius: 0.085,
+          points: [
+            new THREE.Vector3(6.15, 1.2, 4.6),
+            new THREE.Vector3(8.2, 1.2, 5.2),
+            new THREE.Vector3(9.85, 2.2, 5.4)
+          ]
+        }
+      ];
+
+      routes.forEach((route) => {
+        const curve = new THREE.CatmullRomCurve3(route.points, false, 'catmullrom', 0.25);
+        const tubeGeo = new THREE.TubeGeometry(curve, 56, route.radius, 12, false);
+        const isUsed = route.type === 'used';
+        const pipeMat = new THREE.MeshStandardMaterial({
+          color: isUsed ? '#F97316' : '#10B981',
+          emissive: isUsed ? '#ea580c' : '#059669',
+          emissiveIntensity: 0.18,
+          metalness: 0.45,
+          roughness: 0.3
+        });
+
+        const pipeMesh = new THREE.Mesh(tubeGeo, pipeMat);
+        pipeMesh.castShadow = true;
+        pipeMesh.receiveShadow = true;
+        pipesGroup.add(pipeMesh);
+        pipeMeshes.push({ mesh: pipeMesh, isUsed });
+
+        // Flèches directionnelles 3D visibles le long du tuyau
+        [0.35, 0.72].forEach((t) => {
+          const pt = curve.getPointAt(t);
+          const tan = curve.getTangentAt(t).normalize();
+          const arrowGeo = new THREE.ConeGeometry(route.radius * 2.1, route.radius * 4.4, 14);
+          const arrowMat = new THREE.MeshStandardMaterial({
+            color: isUsed ? '#ffedd5' : '#d1fae5',
+            emissive: isUsed ? '#f97316' : '#10b981',
+            emissiveIntensity: 0.55
+          });
+          const arrow = new THREE.Mesh(arrowGeo, arrowMat);
+          arrow.position.copy(pt);
+          arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tan);
+          pipesGroup.add(arrow);
+        });
+
+        // Impulsions lumineuses animées simulant la circulation de l'huile
+        for (let k = 0; k < 2; k++) {
+          const pulse = new THREE.Mesh(
+            new THREE.SphereGeometry(route.radius * 1.48, 12, 12),
+            new THREE.MeshBasicMaterial({ color: isUsed ? '#fef08a' : '#a7f3d0' })
+          );
+          pipesGroup.add(pulse);
+          animatedFlowPulses.push({
+            mesh: pulse,
+            curve,
+            t: k * 0.5,
+            speed: 0.22 + Math.random() * 0.06
+          });
+        }
+      });
+    }
+
+    // Construction complète de la scène
+    buildFactoryArchitecture();
+    buildZone1Reception();
+    buildZone2Storage();
+    buildZone3Pretreatment();
+    buildZone4Regeneration();
+    buildZone5LabAndBlending();
+    buildZone6Packaging();
+    buildPipingNetwork();
+
+    // -------------------------------------------------------------------------
+    // 9. ÉTIQUETTES 3D FLOTTANTES & INTERFACE UTILISATEUR
+    // -------------------------------------------------------------------------
+    const labelsLayer = document.getElementById('labels-layer');
+    const zoneBadges = [];
+    let showLabels = true;
+
+    ZONES_DATA.forEach((zone) => {
+      const el = document.createElement('button');
+      el.className = 'zone-badge-3d bg-white/95 backdrop-blur-sm px-2.5 py-1 rounded-xl shadow-md border border-slate-300/90 flex items-center gap-1.5 text-[11px] font-bold text-slate-900';
+      el.innerHTML = `<span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${zone.dotColor}"></span><span>${zone.shortName}</span>`;
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        stopJuryTour();
+        focusOnZone(zone);
+      });
+      labelsLayer.appendChild(el);
+      zoneBadges.push({ el, pos: zone.labelPos });
+    });
+
+    // Menu latéral des 6 zones
+    const zonesMenuList = document.getElementById('zones-menu-list');
+    ZONES_DATA.forEach((zone) => {
+      const btn = document.createElement('button');
+      btn.className = 'w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-slate-100 text-xs font-semibold text-slate-800 flex items-center justify-between transition-colors';
+      btn.innerHTML = `
+        <span class="flex items-center gap-2 truncate">
+          <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${zone.dotColor}"></span>
+          <span class="truncate">${zone.shortName}</span>
+        </span>
+        <span class="text-slate-400 text-[10px]">→</span>
+      `;
+      btn.addEventListener('click', () => {
+        stopJuryTour();
+        focusOnZone(zone);
+      });
+      zonesMenuList.appendChild(btn);
+    });
+
+    // Barre inférieure des 9 étapes du parcours
+    const pipelineBar = document.getElementById('pipeline-steps-bar');
+    PIPELINE_STEPS.forEach((step, idx) => {
+      const btn = document.createElement('button');
+      const isUsed = step.type === 'used';
+      btn.className = `step-pill shrink-0 px-2.5 py-1 rounded-xl text-[10px] sm:text-[11px] font-bold border transition-all flex items-center gap-1.5 ${
+        isUsed
+          ? 'bg-orange-50 hover:bg-orange-100 text-orange-900 border-orange-200'
+          : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border-emerald-200'
+      }`;
+      btn.innerHTML = `<span class="w-2 h-2 rounded-full ${isUsed ? 'bg-orange-500' : 'bg-emerald-500'}"></span><span>${step.label}</span>`;
+      btn.addEventListener('click', () => {
+        stopJuryTour();
+        animateCamera(step.camPos, step.camTarget);
+        showDetailCard({
+          badge: `ÉTAPE ${idx + 1}/9 • ${isUsed ? 'HUILE USAGÉE' : 'PRODUIT RÉGÉNÉRÉ'}`,
+          badgeColor: isUsed ? 'bg-orange-100 text-orange-800' : 'bg-emerald-100 text-emerald-800',
+          title: step.label,
+          role: `Étape ${idx + 1} du processus de valorisation circulaire ECO-LUB.`,
+          desc: step.desc,
+          isConceptual: step.isConceptual
+        });
+      });
+      pipelineBar.appendChild(btn);
+
+      if (idx < PIPELINE_STEPS.length - 1) {
+        const arrow = document.createElement('span');
+        arrow.className = 'text-slate-400 font-bold text-xs shrink-0';
+        arrow.textContent = '→';
+        pipelineBar.appendChild(arrow);
+      }
+    });
+
+    // Gestion fiche descriptive
+    const detailCard = document.getElementById('detail-card');
+    function showDetailCard(info) {
+      document.getElementById('detail-badge').className = `inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide mb-1 ${info.badgeColor || 'bg-emerald-100 text-emerald-800'}`;
+      document.getElementById('detail-badge').textContent = info.badge || 'ÉQUIPEMENT';
+      document.getElementById('detail-title').textContent = info.title;
+      document.getElementById('detail-desc').textContent = info.desc;
+      document.getElementById('detail-role').textContent = info.role;
+
+      const conceptNote = document.getElementById('detail-concept-note');
+      if (info.isConceptual) {
+        conceptNote.classList.remove('hidden');
+      } else {
+        conceptNote.classList.add('hidden');
+      }
+
+      detailCard.classList.remove('hidden');
+      detailCard.classList.add('flex');
+    }
+
+    document.getElementById('btn-close-detail').addEventListener('click', () => {
+      detailCard.classList.add('hidden');
+      detailCard.classList.remove('flex');
+    });
+
+    function focusOnZone(zone) {
+      animateCamera(zone.camPos, zone.camTarget);
+      showDetailCard({
+        badge: zone.num,
+        badgeColor: zone.badgeColor,
+        title: zone.title,
+        role: zone.role,
+        desc: zone.desc,
+        isConceptual: zone.isConceptual
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // 10. ANIMATION CAMÉRA FLUIDE, RAYCASTING & MODE JURY
+    // -------------------------------------------------------------------------
+    let camTransition = null;
+
+    function animateCamera(targetPos, targetLookAt) {
+      camTransition = {
+        startPos: camera.position.clone(),
+        endPos: targetPos.clone(),
+        startTarget: controls.target.clone(),
+        endTarget: targetLookAt.clone(),
+        alpha: 0
+      };
+    }
+
+    // Raycasting au clic (distingue un vrai clic d'un glisser-déposer OrbitControls)
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let downPos = { x: 0, y: 0 };
+
+    canvas.addEventListener('pointerdown', (e) => {
+      downPos = { x: e.clientX, y: e.clientY };
+    });
+
+    canvas.addEventListener('pointerup', (e) => {
+      const dist = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
+      if (dist > 6) return; // L'utilisateur faisait pivoter la caméra
+
+      const rect = canvas.getBoundingClientRect();
+      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects(clickableObjects, false);
+      if (hits.length > 0 && hits[0].object.userData.interactiveInfo) {
+        stopJuryTour();
+        showDetailCard(hits[0].object.userData.interactiveInfo);
+      }
+    });
+
+    // Boutons de vues prédéfinies
+    document.getElementById('view-iso').addEventListener('click', () => {
+      stopJuryTour();
+      animateCamera(DEFAULT_CAM_POS, DEFAULT_CAM_TARGET);
+    });
+    document.getElementById('view-interior').addEventListener('click', () => {
+      stopJuryTour();
+      animateCamera(INTERIOR_CAM_POS, INTERIOR_CAM_TARGET);
+    });
+    document.getElementById('view-aerial').addEventListener('click', () => {
+      stopJuryTour();
+      animateCamera(AERIAL_CAM_POS, AERIAL_CAM_TARGET);
+    });
+    document.getElementById('btn-reset-cam').addEventListener('click', () => {
+      stopJuryTour();
+      animateCamera(DEFAULT_CAM_POS, DEFAULT_CAM_TARGET);
+    });
+
+    // Bouton Surligner le parcours
+    let highlightPipes = false;
+    const btnHighlight = document.getElementById('btn-highlight-pipes');
+    btnHighlight.addEventListener('click', () => {
+      highlightPipes = !highlightPipes;
+      btnHighlight.classList.toggle('bg-orange-500', highlightPipes);
+      btnHighlight.classList.toggle('text-white', highlightPipes);
+      btnHighlight.classList.toggle('bg-slate-100', !highlightPipes);
+      btnHighlight.classList.toggle('text-slate-800', !highlightPipes);
+
+      architectureMeshes.forEach((m) => {
+        if (m.material) {
+          m.material.transparent = highlightPipes;
+          m.material.opacity = highlightPipes ? 0.22 : 1.0;
+          m.material.needsUpdate = true;
+        }
+      });
+
+      pipeMeshes.forEach(({ mesh }) => {
+        mesh.material.emissiveIntensity = highlightPipes ? 0.85 : 0.18;
+      });
+    });
+
+    // Visite Guidée Jury automatique
+    let juryTourTimer = null;
+    let juryIndex = 0;
+    const btnJuryTour = document.getElementById('btn-jury-tour');
+    const juryLabel = document.getElementById('jury-tour-label');
+
+    function stopJuryTour() {
+      if (juryTourTimer) {
+        clearInterval(juryTourTimer);
+        juryTourTimer = null;
+        juryLabel.textContent = 'Visite Guidée Jury';
+        btnJuryTour.classList.remove('bg-amber-600');
+        btnJuryTour.classList.add('bg-[#136B37]');
+      }
+    }
+
+    btnJuryTour.addEventListener('click', () => {
+      if (juryTourTimer) {
+        stopJuryTour();
+        return;
+      }
+      juryIndex = 0;
+      juryLabel.textContent = 'Arrêter Visite';
+      btnJuryTour.classList.remove('bg-[#136B37]');
+      btnJuryTour.classList.add('bg-amber-600');
+
+      focusOnZone(ZONES_DATA[0]);
+      juryTourTimer = setInterval(() => {
+        juryIndex = (juryIndex + 1) % ZONES_DATA.length;
+        focusOnZone(ZONES_DATA[juryIndex]);
+      }, 4800);
+    });
+
+    // Toggles Repères 3D & Panneau Gauche
+    document.getElementById('btn-toggle-labels').addEventListener('click', () => {
+      showLabels = !showLabels;
+      labelsLayer.style.display = showLabels ? 'block' : 'none';
+    });
+
+    const leftSidebar = document.getElementById('left-sidebar');
+    document.getElementById('btn-toggle-sidebar').addEventListener('click', () => {
+      leftSidebar.classList.toggle('hidden');
+    });
+
+    // Sur petit écran (< 640px), replier le menu gauche par défaut pour garder la vue 100% dégagée
+    if (window.innerWidth < 640) {
+      leftSidebar.classList.add('hidden');
+    }
+
+    // -------------------------------------------------------------------------
+    // 11. BOUCLE DE RENDU 60 FPS & PROJECTION DES REPÈRES 3D
+    // -------------------------------------------------------------------------
+    const clock = new THREE.Clock();
+    const tempVec = new THREE.Vector3();
+
+    function updateProjectedLabels() {
+      if (!showLabels) return;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (!w || !h) return;
+
+      for (let i = 0; i < zoneBadges.length; i++) {
+        const { el, pos } = zoneBadges[i];
+        tempVec.copy(pos).project(camera);
+
+        // Masquer proprement si derrière la caméra
+        if (tempVec.z > 1.0) {
+          el.style.opacity = '0';
+          el.style.pointerEvents = 'none';
+        } else {
+          const sx = (tempVec.x * 0.5 + 0.5) * w;
+          const sy = (-tempVec.y * 0.5 + 0.5) * h;
+          el.style.left = `${sx}px`;
+          el.style.top = `${sy}px`;
+          el.style.opacity = '1';
+          el.style.pointerEvents = 'auto';
+        }
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+
+      // Interpolation caméra douce
+      if (camTransition) {
+        camTransition.alpha = Math.min(1, camTransition.alpha + dt * 1.65);
+        const ease = 1 - Math.pow(1 - camTransition.alpha, 3);
+        camera.position.lerpVectors(camTransition.startPos, camTransition.endPos, ease);
+        controls.target.lerpVectors(camTransition.startTarget, camTransition.endTarget, ease);
+        if (camTransition.alpha >= 1) camTransition = null;
+      }
+
+      // Animation des impulsions d'huile dans les tuyaux
+      for (let i = 0; i < animatedFlowPulses.length; i++) {
+        const p = animatedFlowPulses[i];
+        p.t = (p.t + dt * p.speed) % 1;
+        const pos = p.curve.getPointAt(p.t);
+        p.mesh.position.copy(pos);
+      }
+
+      // Animation des bidons ECO-LUB sur le convoyeur (Zone 6)
+      for (let i = 0; i < animatedBottles.length; i++) {
+        const b = animatedBottles[i];
+        b.progress = (b.progress + dt * 0.085) % 1;
+        b.mesh.position.z = 6.2 - b.progress * 8.2;
+      }
+
+      controls.update();
+      updateProjectedLabels();
+      renderer.render(scene, camera);
+    }
+
+    // Masquage fluide de l'écran de chargement une fois la scène prête
+    window.addEventListener('load', () => {
+      updateRendererSize();
+      const bar = document.getElementById('loading-bar');
+      const loader = document.getElementById('loading-screen');
+      if (bar) bar.style.width = '100%';
+      setTimeout(() => {
+        if (loader) {
+          loader.style.opacity = '0';
+          setTimeout(() => loader.remove(), 500);
+        }
+      }, 300);
+      animate();
+    });
+  </script>
+</body>
+</html>
